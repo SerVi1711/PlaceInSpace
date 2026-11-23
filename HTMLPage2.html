@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Закони Кеплера: візуалізація</title>
+<style>
+    :root {
+        --bg: #070b1c; --panel: #0d1431; --line: #1f2b52; --fg: #e6ebf8; --mut: #8d99bd;
+        --accent: #5fd0c5; --amber: #f2a93b;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body { background: var(--bg); color: var(--fg); font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .app { display: grid; grid-template-columns: 290px 1fr; height: 100dvh; }
+
+    /* ---- бокова панель ---- */
+    .side { background: var(--panel); border-right: 1px solid var(--line); padding: 16px; overflow: auto; display: grid; gap: 14px; align-content: start; }
+    .brand { font-weight: 700; font-size: 17px; letter-spacing: .02em; }
+    .brand span { color: var(--accent); }
+    .card { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 8px; background: rgba(255,255,255,.02); }
+    .card h3 { margin: 0; font-size: 13px; color: var(--mut); font-weight: 600; }
+    .planet-btn { display: flex; align-items: center; gap: 10px; width: 100%; background: transparent; color: var(--fg);
+        border: 1px solid transparent; border-radius: 8px; padding: 7px 8px; font: inherit; cursor: pointer; text-align: left; }
+    .planet-btn:hover { background: rgba(255,255,255,.05); }
+    .planet-btn.on { border-color: var(--accent); background: rgba(95,208,197,.1); }
+    .dot { width: 14px; height: 14px; border-radius: 50%; flex: none; }
+    label.row { display: grid; gap: 4px; color: var(--mut); }
+    label.row b { color: var(--fg); }
+    label.check { display: flex; gap: 8px; align-items: center; color: var(--fg); }
+    input[type=range] { width: 100%; accent-color: var(--amber); }
+    input[type=checkbox] { accent-color: var(--accent); }
+    .hint { color: var(--mut); font-size: 12px; margin: 0; }
+
+    /* ---- основна область ---- */
+    .main { display: grid; grid-template-rows: auto 1fr auto; gap: 12px; padding: 16px; min-height: 0; min-width: 0; }
+    .title { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap;
+        border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; background: var(--panel); }
+    .title h1 { margin: 0; font-size: 18px; font-weight: 600; }
+    .title small { color: var(--mut); font-variant-numeric: tabular-nums; }
+    .stage { position: relative; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; min-height: 0; background: #000010; }
+    .stage canvas { display: block; width: 100%; height: 100%; }
+    .lbl { position: absolute; left: 0; top: 0; pointer-events: none; font-size: 12px; color: #dfe6fa;
+        text-shadow: 0 0 4px #000, 0 0 8px #000; white-space: nowrap; will-change: transform; }
+    .bar { position: absolute; right: 12px; bottom: 12px; left: 12px; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; align-items: center;
+        background: rgba(10,15,38,.85); border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; width: fit-content; margin-left: auto; }
+    .bar button { background: rgba(255,255,255,.06); color: var(--fg); border: 1px solid var(--line); border-radius: 7px; padding: 6px 10px; font: inherit; cursor: pointer; }
+    .bar button:hover { background: rgba(255,255,255,.12); }
+    .bar button.on { background: var(--accent); color: #04211e; border-color: var(--accent); font-weight: 600; }
+    .bar .spd { display: flex; align-items: center; gap: 6px; color: var(--mut); }
+    .bar .spd input { width: 110px; }
+    button:focus-visible, input:focus-visible { outline: 2px solid #6cb6ff; outline-offset: 2px; }
+    .info { display: flex; flex-wrap: wrap; gap: 6px 22px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; background: var(--panel); font-variant-numeric: tabular-nums; }
+    .info div { color: var(--mut); } .info b { color: var(--fg); font-weight: 600; }
+
+    @media (max-width: 820px) {
+        .app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+        .side { max-height: 42dvh; border-right: 0; border-bottom: 1px solid var(--line); }
+    }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div class="app">
+    <aside class="side">
+        <div class="brand">Орбітальна <span>динаміка</span></div>
+
+        <div class="card">
+            <h3>Планета в фокусі (Кеплер)</h3>
+            <div id="planetList"></div>
+        </div>
+
+        <div class="card">
+            <h3>Кеплер 1: еліптичні орбіти</h3>
+            <label class="row">Ексцентриситет e: <b id="eVal">0.15</b>
+                <input id="eSlider" type="range" min="0" max="0.9" step="0.01" value="0.15">
+            </label>
+            <p class="hint">Сонце лежить у фокусі еліпса, а не в його центрі.</p>
+        </div>
+
+        <div class="card">
+            <h3>Кеплер 2: рівні площі</h3>
+            <label class="check"><input id="secChk" type="checkbox" checked> Малювати сектори</label>
+            <button id="clearBtn" class="planet-btn" style="border-color:var(--line)">Очистити сектори</button>
+            <p class="hint">Кожен колір — однаковий проміжок часу (1/16 періоду). Площі однакові.</p>
+        </div>
+    </aside>
+
+    <section class="main">
+        <div class="title">
+            <h1>Внутрішня Сонячна система та закони Кеплера</h1>
+            <small id="simTime">Час симуляції: 0.00 земних років</small>
+        </div>
+
+        <div class="stage" id="stage">
+            <div class="bar">
+                <button id="playBtn" class="on" title="Пауза / пуск">Пауза</button>
+                <span class="spd">Швидкість <input id="sSlider" type="range" min="0.2" max="4" step="0.1" value="1"></span>
+                <button id="btn2d">2D</button>
+                <button id="btn3d" class="on">3D</button>
+                <button id="lblBtn" class="on">Підписи</button>
+                <button id="followBtn">Слідкувати за планетою</button>
+            </div>
+        </div>
+
+        <div class="info" id="info"></div>
+    </section>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const stage = document.getElementById('stage');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000010);
+const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
+camera.position.set(0, 26, 34);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+stage.prepend(renderer.domElement);
+
+// Світло від Сонця (в центрі)
+scene.add(new THREE.AmbientLight(0xffffff, 0.25));
+const sunLight = new THREE.PointLight(0xffddaa, 220);
+sunLight.position.set(0, 0, 0);
+scene.add(sunLight);
+
+// ---------- Сонце (з вашого коду) ----------
+function makeSunTexture() {
+    const w = 1024, h = 512;
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#ffcc00';
+    ctx.fillRect(0, 0, w, h);
+    function blob(x, y, r, color) {
+        for (const dx of [-w, 0, w]) {
+            const g = ctx.createRadialGradient(x + dx, y, 0, x + dx, y, r);
+            g.addColorStop(0, color);
+            g.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = g;
+            ctx.fillRect(x + dx - r, y - r, r * 2, r * 2);
+        }
+    }
+    for (let i = 0; i < 400; i++) {
+        const light = Math.random() > 0.5;
+        blob(Math.random() * w, Math.random() * h, 15 + Math.random() * 40,
+            light ? 'rgba(255, 245, 160, 0.35)' : 'rgba(230, 110, 0, 0.35)');
+    }
+    for (let i = 0; i < 8; i++) {
+        blob(Math.random() * w, h * 0.3 + Math.random() * h * 0.4, 20 + Math.random() * 25, 'rgba(120, 40, 0, 0.8)');
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+}
+const sun = new THREE.Mesh(
+    new THREE.SphereGeometry(1.2, 64, 64),
+    new THREE.MeshBasicMaterial({ map: makeSunTexture(), toneMapped: false }));
+scene.add(sun);
+
+function makeGlowTexture() {
+    const c = document.createElement('canvas');
+    c.width = c.height = 256;
+    const ctx = c.getContext('2d');
+    const g = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+    g.addColorStop(0.0, 'rgba(255, 230, 120, 1)');
+    g.addColorStop(0.3, 'rgba(255, 170, 0, 0.5)');
+    g.addColorStop(1.0, 'rgba(255, 120, 0, 0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 256, 256);
+    return new THREE.CanvasTexture(c);
+}
+const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: makeGlowTexture(), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }));
+glow.scale.set(6.5, 6.5, 1);
+scene.add(glow);
+
+// Зірки на фоні
+{
+    const pts = [];
+    for (let i = 0; i < 900; i++) {
+        const v = new THREE.Vector3().randomDirection().multiplyScalar(150 + Math.random() * 60);
+        pts.push(v.x, v.y, v.z);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0xaab4d4, size: 0.5, sizeAttenuation: false })));
+}
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.maxDistance = 120;
+
+// ---------- Планети ----------
+// Кожна орбіта — еліпс із фокусом у Сонці (0,0,0); центр еліпса зсунутий на -a*e по X.
+const DATA = [
+    { name: 'Меркурій', a: 4.5,  e: 0.30, color: 0xb9a89a, r: 0.30 },
+    { name: 'Венера',   a: 7.2,  e: 0.10, color: 0xe3b36a, r: 0.45 },
+    { name: 'Земля',    a: 10,   e: 0.15, color: 0x4aa8ff, r: 0.48 },
+    { name: 'Марс',     a: 15,   e: 0.20, color: 0xd9603b, r: 0.38 },
+];
+const ORBIT_POINTS = 256;
+const planets = DATA.map(d => {
+    const p = { ...d, M: 0 };
+    p.mesh = new THREE.Mesh(new THREE.SphereGeometry(d.r, 32, 32),
+        new THREE.MeshStandardMaterial({ color: d.color, roughness: 0.8 }));
+    scene.add(p.mesh);
+    p.geom = new THREE.BufferGeometry();
+    p.geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(ORBIT_POINTS * 3), 3));
+    p.line = new THREE.LineLoop(p.geom, new THREE.LineBasicMaterial({ color: 0x6f7ba6, transparent: true, opacity: 0.7, toneMapped: false }));
+    scene.add(p.line);
+    p.n = Math.pow(10 / d.a, 1.5);          // 3-й закон Кеплера: T ∝ a^1.5, тобто n ∝ a^-1.5
+    return p;
+});
+let focus = 2;                               // індекс планети в фокусі (Земля)
+
+function updateOrbitLine(p) {
+    const b = p.a * Math.sqrt(1 - p.e * p.e);
+    const pos = p.geom.attributes.position;
+    for (let i = 0; i < ORBIT_POINTS; i++) {
+        const t = (i / ORBIT_POINTS) * Math.PI * 2;
+        pos.setXYZ(i, p.a * Math.cos(t) - p.a * p.e, 0, b * Math.sin(t));
+    }
+    pos.needsUpdate = true;
+}
+planets.forEach(updateOrbitLine);
+
+// Рівняння Кеплера: M = E - e sin E
+function solveKepler(M, e) { let E = M; for (let i = 0; i < 10; i++) E = M + e * Math.sin(E); return E; }
+function orbitPos(p, M, out = new THREE.Vector3()) {
+    const E = solveKepler(M, p.e);
+    return out.set(p.a * (Math.cos(E) - p.e), 0, p.a * Math.sqrt(1 - p.e * p.e) * Math.sin(E));
+}
+
+// ---------- Сектори для планети в фокусі ----------
+const N = 16, dM = (Math.PI * 2) / N;
+const sectors = [], endM = new Array(N).fill(null);
+for (let k = 0; k < N; k++) {
+    const m = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({
+        color: new THREE.Color().setHSL(k / N, 0.75, 0.55), transparent: true, opacity: 0.6,
+        side: THREE.DoubleSide, toneMapped: false }));
+    sectors.push(m); scene.add(m);
+}
+function buildSector(k, end) {
+    const p = planets[focus], m0 = k * dM;
+    const steps = Math.max(2, Math.ceil(48 * (end - m0) / dM));
+    const v = [], a = new THREE.Vector3(), b = new THREE.Vector3();
+    for (let i = 0; i < steps; i++) {
+        orbitPos(p, m0 + (end - m0) * i / steps, a);
+        orbitPos(p, m0 + (end - m0) * (i + 1) / steps, b);
+        v.push(0, 0, 0, a.x, a.y, a.z, b.x, b.y, b.z);
+    }
+    sectors[k].geometry.dispose();
+    sectors[k].geometry = new THREE.BufferGeometry();
+    sectors[k].geometry.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
+}
+function clearSectors() {
+    for (let k = 0; k < N; k++) { endM[k] = null; sectors[k].geometry.dispose(); sectors[k].geometry = new THREE.BufferGeometry(); }
+    curK = -1;
+}
+
+// ---------- Підписи ----------
+const labels = [{ name: 'Сонце', obj: sun }, ...planets.map(p => ({ name: p.name, obj: p.mesh }))].map(l => {
+    l.el = document.createElement('div'); l.el.className = 'lbl'; l.el.textContent = l.name; stage.appendChild(l.el); return l;
+});
+let showLabels = true;
+
+// ---------- UI ----------
+let speed = 1, playing = true, follow = false, curK = -1, simT = 0;
+const $ = id => document.getElementById(id);
+const list = $('planetList');
+planets.forEach((p, i) => {
+    const b = document.createElement('button');
+    b.className = 'planet-btn'; b.dataset.i = i;
+    b.innerHTML = `<span class="dot" style="background:#${p.color.toString(16).padStart(6, '0')}"></span>${p.name}`;
+    b.onclick = () => setFocus(i);
+    list.appendChild(b);
+});
+function setFocus(i) {
+    focus = i; clearSectors();
+    [...list.children].forEach((b, j) => b.classList.toggle('on', j === i));
+    $('eSlider').value = planets[i].e; $('eVal').textContent = planets[i].e.toFixed(2);
+}
+setFocus(2);
+
+$('eSlider').addEventListener('input', ev => {
+    const p = planets[focus]; p.e = +ev.target.value;
+    $('eVal').textContent = p.e.toFixed(2);
+    updateOrbitLine(p);
+    for (let k = 0; k < N; k++) if (endM[k] !== null) buildSector(k, endM[k]);
+});
+$('sSlider').addEventListener('input', ev => speed = +ev.target.value);
+$('secChk').addEventListener('change', () => { sectors.forEach(s => s.visible = $('secChk').checked); });
+$('clearBtn').onclick = clearSectors;
+$('playBtn').onclick = () => { playing = !playing; $('playBtn').textContent = playing ? 'Пауза' : 'Пуск'; $('playBtn').classList.toggle('on', playing); };
+$('lblBtn').onclick = () => { showLabels = !showLabels; $('lblBtn').classList.toggle('on', showLabels); };
+$('followBtn').onclick = () => {
+    follow = !follow; $('followBtn').classList.toggle('on', follow);
+    if (!follow) controls.target.set(0, 0, 0);
+};
+function setMode(is3d) {
+    $('btn3d').classList.toggle('on', is3d); $('btn2d').classList.toggle('on', !is3d);
+    controls.enableRotate = is3d;
+    const d = camera.position.distanceTo(controls.target);
+    if (is3d) camera.position.copy(controls.target).add(new THREE.Vector3(0, d * 0.6, d * 0.8));
+    else camera.position.copy(controls.target).add(new THREE.Vector3(0, d, 0.001));
+}
+$('btn3d').onclick = () => setMode(true);
+$('btn2d').onclick = () => setMode(false);
+
+function resize() {
+    const w = stage.clientWidth, h = stage.clientHeight;
+    renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stage); resize();
+
+// ---------- Анімація ----------
+const clock = new THREE.Clock(), v3 = new THREE.Vector3(), prevPos = new THREE.Vector3();
+function animate() {
+    requestAnimationFrame(animate);
+    const dt = Math.min(clock.getDelta(), 0.05);
+    sun.rotation.y += 0.002;
+
+    if (playing) {
+        planets.forEach(p => { p.M += dt * speed * 0.6 * p.n; });
+        simT += dt * speed * 0.6 / (Math.PI * 2);   // у земних роках (n=1 для Землі)
+    }
+    planets.forEach(p => {
+        const Mw = ((p.M % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+        orbitPos(p, Mw, p.mesh.position);
+    });
+
+    // сектори — тільки для планети в фокусі
+    const fp = planets[focus];
+    const Mw = ((fp.M % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    const k = Math.floor(Mw / dM);
+    if (k !== curK) {
+        const pk = (k + N - 1) % N;
+        if (curK === pk) { endM[pk] = (pk + 1) * dM; buildSector(pk, endM[pk]); }
+        curK = k;
+    }
+    endM[k] = Mw; buildSector(k, Mw);
+
+    if (follow) {                                  // камера їде за планетою
+        prevPos.copy(controls.target);
+        controls.target.copy(fp.mesh.position);
+        camera.position.add(v3.subVectors(controls.target, prevPos));
+    }
+
+    // інформаційна панель
+    const r = fp.mesh.position.length();
+    $('info').innerHTML =
+        `<div>Фокус Кеплера: <b>${fp.name}</b></div>` +
+        `<div>a = <b>${fp.a.toFixed(1)}</b></div><div>e = <b>${fp.e.toFixed(2)}</b></div>` +
+        `<div>Відстань до Сонця: <b>${(r / fp.a).toFixed(2)} a</b></div>` +
+        `<div>Швидкість: <b>${Math.sqrt(2 * fp.a / r - 1).toFixed(2)} v₀</b></div>` +
+        `<div>Період: <b>${Math.pow(fp.a / 10, 1.5).toFixed(2)} р.</b></div>`;
+    $('simTime').textContent = `Час симуляції: ${simT.toFixed(2)} земних років`;
+
+    controls.update();
+    renderer.render(scene, camera);
+
+    const w = stage.clientWidth, h = stage.clientHeight;
+    labels.forEach(l => {
+        l.obj.getWorldPosition(v3); v3.project(camera);
+        const vis = showLabels && v3.z < 1;
+        l.el.style.display = vis ? '' : 'none';
+        if (vis) l.el.style.transform = `translate(${(v3.x * .5 + .5) * w}px, ${(-v3.y * .5 + .5) * h}px) translate(-50%, 14px)`;
+    });
+}
+animate();
+</script>
+</body>
+</html>
