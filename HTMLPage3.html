@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body { margin: 0; background: #000010; overflow: hidden; }
+        /* єдиний елемент керування: повзунок форми орбіти з TASK-17 */
+        #eBox {
+            position: fixed; left: 14px; bottom: 14px; padding: 8px 12px; border-radius: 8px;
+            background: rgba(10, 14, 36, 0.7); color: #cdd5ee; font: 13px system-ui, sans-serif;
+        }
+        #eBox input { vertical-align: middle; width: 160px; accent-color: #f2a93b; }
+    </style>
+    <script type="importmap">
+        {
+          "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+          }
+        }
+    </script>
+</head>
+<body>
+    <div id="eBox">Форма орбіти e: <input id="eSlider" type="range" min="0" max="0.9" step="0.01" value="0.12"></div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 55, 70);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        document.body.appendChild(renderer.domElement);
+
+        // Світло від Сонця (без затухання, щоб далекі планети теж були видні)
+        scene.add(new THREE.AmbientLight(0xffffff, 0.25));
+        const sunLight = new THREE.PointLight(0xffddaa, 4.5, 0, 0);
+        scene.add(sunLight);
+
+        // ---------- Сонце ----------
+        function makeSunTexture() {
+            const w = 1024, h = 512;
+            const c = document.createElement('canvas');
+            c.width = w; c.height = h;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#ffcc00';
+            ctx.fillRect(0, 0, w, h);
+            function blob(x, y, r, color) {
+                for (const dx of [-w, 0, w]) {
+                    const g = ctx.createRadialGradient(x + dx, y, 0, x + dx, y, r);
+                    g.addColorStop(0, color);
+                    g.addColorStop(1, 'rgba(0,0,0,0)');
+                    ctx.fillStyle = g;
+                    ctx.fillRect(x + dx - r, y - r, r * 2, r * 2);
+                }
+            }
+            for (let i = 0; i < 400; i++) {
+                const light = Math.random() > 0.5;
+                blob(Math.random() * w, Math.random() * h, 15 + Math.random() * 40,
+                    light ? 'rgba(255, 245, 160, 0.35)' : 'rgba(230, 110, 0, 0.35)');
+            }
+            for (let i = 0; i < 8; i++) {
+                blob(Math.random() * w, h * 0.3 + Math.random() * h * 0.4, 20 + Math.random() * 25, 'rgba(120, 40, 0, 0.8)');
+            }
+            const tex = new THREE.CanvasTexture(c);
+            tex.colorSpace = THREE.SRGBColorSpace;
+            return tex;
+        }
+        const sun = new THREE.Mesh(
+            new THREE.SphereGeometry(1.2, 64, 64),
+            new THREE.MeshBasicMaterial({ map: makeSunTexture(), toneMapped: false }));
+        scene.add(sun);
+
+        function makeGlowTexture() {
+            const c = document.createElement('canvas');
+            c.width = c.height = 256;
+            const ctx = c.getContext('2d');
+            const g = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+            g.addColorStop(0.0, 'rgba(255, 230, 120, 1)');
+            g.addColorStop(0.3, 'rgba(255, 170, 0, 0.5)');
+            g.addColorStop(1.0, 'rgba(255, 120, 0, 0)');
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, 256, 256);
+            return new THREE.CanvasTexture(c);
+        }
+        const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: makeGlowTexture(), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }));
+        glow.scale.set(6.5, 6.5, 1);
+        scene.add(glow);
+
+        // Зірки
+        {
+            const pts = [];
+            for (let i = 0; i < 900; i++) {
+                const v = new THREE.Vector3().randomDirection().multiplyScalar(320 + Math.random() * 80);
+                pts.push(v.x, v.y, v.z);
+            }
+            const g = new THREE.BufferGeometry();
+            g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+            scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0xaab4d4, size: 0.5, sizeAttenuation: false })));
+        }
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.minDistance = 1.5;
+        controls.maxDistance = 200;
+
+        // ================= TASK-17: орбіти, Сонце у фокусі =================
+        // Сонце в (0,0,0) = фокус кожного еліпса; центр еліпса зсунутий на -a*e по X.
+        const DATA = [
+            { name: 'Меркурій', a: 4.5,  e: 0.30, color: 0xb9a89a, r: 0.30 },
+            { name: 'Венера',   a: 7.2,  e: 0.10, color: 0xe3b36a, r: 0.45 },
+            { name: 'Земля',    a: 10,   e: 0.12, color: 0x4aa8ff, r: 0.48 },
+            { name: 'Марс',     a: 14,   e: 0.15, color: 0xd9603b, r: 0.38 },
+            { name: 'Юпітер',   a: 21,   e: 0.10, color: 0xd8b48a, r: 1.25 },
+            { name: 'Сатурн',   a: 28,   e: 0.10, color: 0xe8d49a, r: 1.00, ring: true },
+            { name: 'Уран',     a: 35,   e: 0.08, color: 0x8fe0e6, r: 0.70 },
+            { name: 'Нептун',   a: 42,   e: 0.06, color: 0x4a6cf0, r: 0.68 },
+        ];
+        const ORBIT_POINTS = 256;
+        const pickables = [];
+        const planets = DATA.map((d, i) => {
+            const p = { ...d, index: i, M: 0 };
+            p.mesh = new THREE.Mesh(new THREE.SphereGeometry(d.r, 32, 32),
+                new THREE.MeshStandardMaterial({ color: d.color, roughness: 0.8 }));
+            scene.add(p.mesh);
+            // невидима збільшена кулька, щоб легше влучити мишкою
+            const hit = new THREE.Mesh(new THREE.SphereGeometry(Math.max(d.r * 2.2, 0.9), 12, 12),
+                new THREE.MeshBasicMaterial({ visible: false }));
+            hit.userData.i = i;
+            p.mesh.add(hit); pickables.push(hit);
+            if (d.ring) {
+                const ring = new THREE.Mesh(new THREE.RingGeometry(d.r * 1.4, d.r * 2.3, 64),
+                    new THREE.MeshBasicMaterial({ color: 0xcdb98a, side: THREE.DoubleSide, transparent: true, opacity: 0.75 }));
+                ring.rotation.x = -Math.PI / 2 + 0.45;
+                p.mesh.add(ring);
+            }
+            p.geom = new THREE.BufferGeometry();
+            p.geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(ORBIT_POINTS * 3), 3));
+            p.line = new THREE.LineLoop(p.geom,
+                new THREE.LineBasicMaterial({ color: 0x6f7ba6, transparent: true, opacity: 0.7, toneMapped: false }));
+            scene.add(p.line);
+            p.n = Math.pow(10 / d.a, 1.5);          // 3-й закон Кеплера: T ∝ a^1.5
+            return p;
+        });
+        let focus = 2;                               // планета, для якої малюються сектори (Земля)
+
+        function updateOrbitLine(p) {
+            const b = p.a * Math.sqrt(1 - p.e * p.e);
+            const pos = p.geom.attributes.position;
+            for (let i = 0; i < ORBIT_POINTS; i++) {
+                const t = (i / ORBIT_POINTS) * Math.PI * 2;
+                pos.setXYZ(i, p.a * Math.cos(t) - p.a * p.e, 0, b * Math.sin(t));
+            }
+            pos.needsUpdate = true;
+        }
+        planets.forEach(updateOrbitLine);
+
+        // ================= TASK-18: рух за Кеплером + сектори =================
+        function solveKepler(M, e) { let E = M + e * Math.sin(M); for (let i = 0; i < 12; i++) E -= (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E)); return E; }
+        function orbitPos(p, M, out = new THREE.Vector3()) {
+            const E = solveKepler(M, p.e);
+            return out.set(p.a * (Math.cos(E) - p.e), 0, p.a * Math.sqrt(1 - p.e * p.e) * Math.sin(E));
+        }
+
+        const N = 16, dM = (Math.PI * 2) / N;
+        const sectors = [], endM = new Array(N).fill(null);
+        let curK = -1;
+        for (let k = 0; k < N; k++) {
+            const m = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({
+                color: new THREE.Color().setHSL(k / N, 0.75, 0.55), transparent: true, opacity: 0.6,
+                side: THREE.DoubleSide, toneMapped: false }));
+            sectors.push(m); scene.add(m);
+        }
+        function buildSector(k, end) {
+            const p = planets[focus], m0 = k * dM;
+            const steps = Math.max(2, Math.ceil(48 * (end - m0) / dM));
+            const v = [], a = new THREE.Vector3(), b = new THREE.Vector3();
+            for (let i = 0; i < steps; i++) {
+                orbitPos(p, m0 + (end - m0) * i / steps, a);
+                orbitPos(p, m0 + (end - m0) * (i + 1) / steps, b);
+                v.push(0, 0, 0, a.x, a.y, a.z, b.x, b.y, b.z);
+            }
+            sectors[k].geometry.dispose();
+            sectors[k].geometry = new THREE.BufferGeometry();
+            sectors[k].geometry.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
+        }
+        function clearSectors() {
+            for (let k = 0; k < N; k++) { endM[k] = null; sectors[k].geometry.dispose(); sectors[k].geometry = new THREE.BufferGeometry(); }
+            curK = -1;
+        }
+
+        // Повзунок: міняє форму орбіти вибраної планети
+        const eSlider = document.getElementById('eSlider');
+        eSlider.addEventListener('input', () => {
+            const p = planets[focus]; p.e = +eSlider.value;
+            updateOrbitLine(p);
+            for (let k = 0; k < N; k++) if (endM[k] !== null) buildSector(k, endM[k]);
+        });
+
+        // ================= Клік по планеті + плавний політ камери =================
+        const UP = new THREE.Vector3(0, 1, 0);
+        const ease = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        let flight = null, follow = false;
+
+        function planetDest(i) {
+            const p = planets[i], d = Math.max(p.r * 7, 3);
+            return () => {
+                const pos = p.mesh.position;
+                const off = pos.clone().negate(); off.y = 0;          // у бік Сонця: видно освітлений бік
+                if (off.lengthSq() < 1e-6) off.set(1, 0, 0);
+                off.normalize().applyAxisAngle(UP, 0.6).multiplyScalar(d);
+                off.y += d * 0.35;
+                return { pos: pos.clone().add(off), target: pos.clone() };
+            };
+        }
+        function selectPlanet(i) {
+            focus = i; clearSectors();
+            eSlider.value = planets[i].e;
+            follow = true;
+            flight = { t: 0, dur: 2.2, fp: camera.position.clone(), ft: controls.target.clone(), get: planetDest(i) };
+            controls.enabled = false;
+        }
+
+        const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+        function pick(ev) {
+            ndc.set((ev.clientX / window.innerWidth) * 2 - 1, -(ev.clientY / window.innerHeight) * 2 + 1);
+            ray.setFromCamera(ndc, camera);
+            const hit = ray.intersectObjects([sun, ...pickables], false)[0];
+            return hit && hit.object !== sun ? hit.object.userData.i : -1;
+        }
+        const dom = renderer.domElement;
+        let down = null;
+        dom.addEventListener('pointerdown', e => { down = { x: e.clientX, y: e.clientY }; });
+        dom.addEventListener('pointerup', e => {
+            if (!down) return;
+            const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
+            down = null;
+            if (moved > 5) return;                      // це було обертання камери, а не клік
+            const i = pick(e);
+            if (i >= 0) onPick(i);
+        });
+        dom.addEventListener('pointermove', e => { if (!down) dom.style.cursor = pick(e) >= 0 ? 'pointer' : ''; });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // ---------- Анімація ----------
+        const clock = new THREE.Clock(), v3 = new THREE.Vector3(), prev = new THREE.Vector3();
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = Math.min(clock.getDelta(), 0.05);
+            sun.rotation.y += 0.002;
+
+            planets.forEach(p => {
+                if (G.law === 2 && p === planets[focus]) p.M = thetaToM(G.theta, p.e); else p.M += dt * 0.6 * p.n * G.speed;
+                const Mw = ((p.M % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+                orbitPos(p, Mw, p.mesh.position);
+            });
+
+            // сектори за вибраною планетою
+            const fp = planets[focus];
+            const Mw = ((fp.M % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+            const k = Math.floor(Mw / dM);
+            if (sectorsOn() && k !== curK) {
+                const pk = (k + N - 1) % N;
+                if (curK === pk) { endM[pk] = (pk + 1) * dM; buildSector(pk, endM[pk]); }
+                curK = k;
+            }
+            if (sectorsOn()) { endM[k] = Mw; buildSector(k, Mw); }
+
+            if (flight) {
+                flight.t += dt;
+                const s = ease(Math.min(1, flight.t / flight.dur)), d = flight.get();
+                camera.position.lerpVectors(flight.fp, d.pos, s);
+                controls.target.lerpVectors(flight.ft, d.target, s);
+                if (flight.t >= flight.dur) { flight = null; controls.enabled = true; }
+            } else if (follow) {                        // після прильоту камера їде за планетою
+                prev.copy(controls.target);
+                controls.target.copy(fp.mesh.position);
+                camera.position.add(v3.subVectors(controls.target, prev));
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        // ================= ПРИВ'ЯЗКА ДО САЙТУ (додано) =================
+        // Сайт (батьківська сторінка) надсилає стан через postMessage, тут перебудовуємо сцену.
+        // Якщо файл відкрито окремо (не в iframe), все працює як раніше.
+        const G = { law: 0, focus: 'Земля', e: 0.12, a: 1, speed: 1, sec: true, theta: 120, n: 4, dt: 30, hl: true,
+                    p1: 'Земля', p2: 'Марс', a1: 1, a2: 1.52, duo: false };
+        const base = planets.map(p => ({ a: p.a, e: p.e }));            // початкові орбіти
+        const embedded = window.parent !== window;
+        const sectorsOn = () => G.law === 0 || (G.law === 1 && G.sec && !G.duo);
+
+        // кут θ від перигелію (градуси) -> середня аномалія M
+        function thetaToM(deg, e) {
+            const th = deg * Math.PI / 180;
+            const E = 2 * Math.atan2(Math.sqrt(1 - e) * Math.sin(th / 2), Math.sqrt(1 + e) * Math.cos(th / 2));
+            return E - e * Math.sin(E);
+        }
+        // сектор від Сонця по дузі m0 -> m1 (для 2-го закону)
+        function buildRange(k, m0, m1) {
+            const p = planets[focus], steps = Math.max(2, Math.ceil(48 * (m1 - m0) / dM));
+            const v = [], a = new THREE.Vector3(), b = new THREE.Vector3();
+            for (let i = 0; i < steps; i++) {
+                orbitPos(p, m0 + (m1 - m0) * i / steps, a);
+                orbitPos(p, m0 + (m1 - m0) * (i + 1) / steps, b);
+                v.push(0, 0, 0, a.x, a.y, a.z, b.x, b.y, b.z);
+            }
+            sectors[k].geometry.dispose();
+            sectors[k].geometry = new THREE.BufferGeometry();
+            sectors[k].geometry.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
+        }
+        // плавний політ камери (той самий механізм flight, що й у вашому коді)
+        function fly(pos, target) {
+            flight = { t: 0, dur: 1.6, fp: camera.position.clone(), ft: controls.target.clone(), get: () => ({ pos, target }) };
+            controls.enabled = false;
+        }
+
+        let lastKey = '', lastFocus = '';
+        function apply(s) {
+            Object.assign(G, s);
+            const L = G.law, duo = L === 3 || (L === 1 && !!s.res);      // режим двох планет
+            const sel = planets.find(p => p.name === G.focus) || planets[2];
+            G.duo = duo;
+            planets.forEach((p, i) => { p.a = base[i].a; p.e = base[i].e; p.mesh.visible = p.line.visible = !duo; });
+            if (duo) {                                                   // лише дві вибрані планети
+                [[G.p1, G.a1], [G.p2, G.a2]].forEach(([n, a]) => {
+                    const p = planets.find(q => q.name === n);
+                    if (p) { p.a = a * 10; p.mesh.visible = p.line.visible = true; }
+                });
+            } else { sel.a = G.a * 10; sel.e = G.e; }                    // 1-2 закон: e та a вибраної планети
+            planets.forEach(p => { p.n = Math.pow(10 / p.a, 1.5); updateOrbitLine(p); });   // T ~ a^1.5
+            focus = planets.indexOf(sel); follow = false;
+            clearSectors();
+            sectors.forEach(m => m.material.opacity = G.hl ? 0.6 : 0.15);
+            if (L === 2) {                                               // n секторів по dt діб від кута θ
+                const fp = planets[focus], M0 = thetaToM(G.theta, fp.e);
+                const span = 2 * Math.PI * G.dt / (365.25 * Math.pow(fp.a / 10, 1.5));
+                for (let k = 0; k < Math.min(G.n, N); k++)
+                    buildRange(k, M0 + 2 * Math.PI * k / G.n, M0 + 2 * Math.PI * k / G.n + span);
+            }
+            const key = L + (duo ? 'd' : '');
+            if (key !== lastKey || G.focus !== lastFocus) {              // огляд орбіти з висоти
+                const m = duo ? Math.max(G.a1, G.a2) * 10 : sel.a * (1 + sel.e), d = m * 1.6;
+                const pos = new THREE.Vector3(0, d * 0.85, d * 1.05);
+                if (!lastKey) { camera.position.copy(pos); controls.target.set(0, 0, 0); }
+                else fly(pos, new THREE.Vector3());
+                lastKey = key; lastFocus = G.focus;
+            }
+        }
+        window.addEventListener('message', e => { if (e.data && e.data.type === 'state') apply(e.data.state); });
+
+        // клік по планеті: у сайті повідомляємо батьківську сторінку, окремо — ваш політ камери
+        function onPick(i) {
+            if (!embedded) { selectPlanet(i); return; }
+            if (G.duo) return;
+            window.parent.postMessage({ type: 'focus', name: planets[i].name, e: base[i].e, a: base[i].a / 10 }, '*');
+        }
+
+        // підписи планет у режимі двох планет
+        const lbls = planets.map(p => {
+            const d = document.createElement('div'); d.textContent = p.name;
+            d.style.cssText = 'position:fixed;display:none;color:#a9a8c4;font:12px system-ui,sans-serif;pointer-events:none';
+            document.body.appendChild(d); return d;
+        });
+        const tv = new THREE.Vector3();
+        (function placeLabels() {
+            requestAnimationFrame(placeLabels);
+            planets.forEach((p, i) => {
+                const d = lbls[i];
+                if (!G.duo || !p.mesh.visible) { d.style.display = 'none'; return; }
+                tv.copy(p.mesh.position).project(camera);
+                d.style.display = 'block';
+                d.style.left = ((tv.x * 0.5 + 0.5) * innerWidth + 10) + 'px';
+                d.style.top = ((-tv.y * 0.5 + 0.5) * innerHeight - 18) + 'px';
+            });
+        })();
+
+        if (embedded) {                                                  // у сайті: ховаємо старий повзунок e і кажемо «я готова»
+            document.getElementById('eBox').style.display = 'none';
+            window.parent.postMessage({ type: 'ready' }, '*');
+        }
+
+        animate();
+    </script>
+</body>
+</html>
