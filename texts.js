@@ -1,55 +1,32 @@
 /* ============================================================
    texts.js — усі тексти сайту в одному місці
-   Змінюйте або перекладайте тексти тут, app.js чіпати не треба.
    ============================================================ */
 window.TEXTS = {
-  /* Загальне */
-  pageTitle: 'Cosmic Dynamics',
-  brandFirst: 'COSMIC',
-  brandSecond: 'DYNAMICS',
-  title: 'Inner Solar System & Kepler Laws Visualization',
-  userName: 'Alex Peterson',
-  searchPlaceholder: 'Search phenomena...',
-  simulationDate: 'Simulation Date:',
-  copyright: 'Copyright © Cosmic Dynamics. All rights reserved.',
+  pageTitle: 'Place in Space', galaxyTitle: 'Сонячна система',
+  brandFirst: 'PLACE', brandSecond: 'IN SPACE',
+  lawsGroup: 'Закони Кеплера',
+  laws: ['1 закон Кеплера', '2 закон Кеплера', '3 закон Кеплера'],
+  tour: 'Екскурс Сонячною системою',
+  configs: 'Конфігурації планет',
+  settings: 'Налаштування · {n}-й закон',
 
-  /* Область планет (заглушка) */
-  planetAreaPlaceholder: 'Planet area',
+  kepler: {
+    orbitShape: 'Форма орбіти', eccentricity: 'Ексцентриситет e:', eHintMin: '0 · коло', eHintMax: '0.9 · еліпс',
+    semiMajor: 'Велика піввісь a:', timeSpeed: 'Швидкість часу:', sectors: 'Сектори рівних площ:',
+    equalAreas: 'Рівні площі за рівний час', theta: 'Кутове положення на орбіті', e2: 'Ексцентриситет e',
+    count: 'Кількість секторів', dt: 'Тривалість Δt', highlight: 'Підсвітити однакові площі',
+    twoPlanets: 'Періоди двох планет', twoShort: 'Дві планети', planet1: 'Планета 1', planet2: 'Планета 2',
+    r1: 'Радіус орбіти a₁', r2: 'Радіус орбіти a₂', calc: 'Розрахувати період',
+    au: 'а.о.', deg: '°', days: 'діб'
+  },
 
-  /* Бічне меню: групи та пункти.
-     label = текст у меню, value = що показується внизу сторінки */
-  keplerGroup: 'Kepler Laws',
-  keplerItems: [
-    {label: 'General Introduction',        value: 'General Introduction'},
-    {label: 'Kepler 1: Elliptical Orbits', value: 'Elliptical Orbits'},
-    {label: 'Kepler 2: Equal Areas',       value: 'Equal Areas'},
-    {label: 'Kepler 3: Harmonics',         value: 'Harmonics'}
-  ],
-  lagrangeGroup: 'Lagrange Points',
-  lagrangeItems: [
-    {label: 'What are L-Points?',            value: 'What are L-Points?'},
-    {label: 'Three-Body Problem',            value: 'Three-Body Problem'},
-    {label: 'L1, L2, L3, L4, L5 Detailed',   value: 'Earth-Moon L2'}
-  ],
-  navItems: ['Celestial Objects', 'Orbits', 'Simulations', 'User Profile'],
-
-  /* Панель керування */
-  speed: 'Speed',
-  view2d: '2D',
-  view3d: '3D',
-  showLabels: 'Show labels',
-  focusOnEarth: 'Focus on Earth',
-
-  /* Нижні блоки */
-  keplerFocusLabel: 'Current Kepler focus:',
-  keplerFocusDefault: 'Earth',
-  lpointFocusLabel: 'Current L-Point focus:',
-  lpointFocusDefault: 'Earth-Moon L2',
-
-  /* Службові підписи (для доступності) */
-  menuAria: 'Menu',
-  sectionsAria: 'Sections',
-  searchAria: 'Search',
-  zoomInAria: 'Zoom in',
-  zoomOutAria: 'Zoom out'
+  results: {
+    title: 'Розрахунок', peri: 'Перигелій', aph: 'Афелій', formula2: 'A = ½ · r² · Δθ',
+    area: 'Площа сектора', dist: 'Відстань до Сонця', formula3: 'T₁² / a₁³ = T₂² / a₂³', years: 'р.',
+    stepsTitle: 'Покроковий розрахунок періодів обертання',
+    wait: 'Введіть a₁ і a₂ та натисніть «Розрахувати період», щоб пройти кроки',
+    check: 'Перевірка закону', checkWait: 'Перевірка закону з’явиться після останнього кроку',
+    back: '← Назад', all: 'Показати всі', next: 'Далі →', restart: 'Почати спочатку',
+    step: 'Крок {i} з {n}', planet: 'Планета', err: 'Не вдалося отримати дані з сервера'
+  }
 };
