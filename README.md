@@ -8,4 +8,4 @@
 ## Технологічний стек
 * Backend: Python
 * Frontend: HTML, JavaScript
-* 3D-графіка: Three.js
+* 3D-графіка: HTML
